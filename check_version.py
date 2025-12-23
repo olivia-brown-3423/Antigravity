@@ -99,18 +99,15 @@ def 更新版本文件(新版本, 完整版本, 历史列表):
     with open(README路径, "w", encoding="utf-8") as f:
         f.write(README内容)
     
-    # 只要版本变了或者 README 需要更新，就返回 True
-    if 新版本 != 旧版本 or 需要更新README:
-        if 新版本 != 旧版本:
-            print(f"检测到新版本: {旧版本} -> {新版本}")
-            with open(版本文件路径, "w", encoding="utf-8") as f:
-                f.write(新版本)
-        else:
-            print("版本未变，但更新了 README.md")
-        return True
-    else:
-        print(f"当前已是最新版本且 README 已是最新")
-        return False
+    版本变化 = (新版本 != 旧版本)
+    if 版本变化:
+        print(f"检测到新版本: {旧版本} -> {新版本}")
+        with open(版本文件路径, "w", encoding="utf-8") as f:
+            f.write(新版本)
+    elif 需要更新README:
+        print("版本未变，但更新了 README.md (时间戳或内容变动)")
+        
+    return 版本变化, 需要更新README
 
 def 下载安装包(版本, 完整版本):
     下载任务 = [
@@ -162,22 +159,28 @@ if __name__ == "__main__":
     需要初始化 = not os.path.exists("VERSION")
     
     if 最新主版本:
-        更新成功 = 更新版本文件(最新主版本, 最新完整版本, 历史版本列表)
+        版本变化, 首页变化 = 更新版本文件(最新主版本, 最新完整版本, 历史版本列表)
         
         if "GITHUB_OUTPUT" in os.environ:
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                 if 需要初始化:
                     import json
-                    # 关键优化：history 只包含比当前版更旧的版本，防止重复创建
+                    # 历史旧版本不包含当前最新版
                     历史旧版本 = [项 for 项 in 历史版本列表 if 项["version"] != 最新主版本]
                     f.write(f"init=true\n")
                     f.write(f"history={json.dumps(历史旧版本)}\n")
                 
-                # 只要是初始化或者版本更新，都执行备份并标记为 updated
-                if 更新成功 or 需要初始化:
-                    print(f"开始执行安装包备份流程 (原因: {'新版本' if 更新成功 else '初始化'})")
+                # 信号输出
+                f.write(f"version_changed={'true' if 版本变化 else 'false'}\n")
+                f.write(f"readme_changed={'true' if 首页变化 else 'false'}\n")
+                f.write(f"version={最新主版本}\n")
+                f.write(f"full_version={最新完整版本}\n")
+
+                # 只有版本真的变了，或者第一次初始化，才下载备份
+                if 版本变化 or 需要初始化:
+                    print(f"触发安装包备份 (原因: {'新版本' if 版本变化 else '初始化'})")
                     文件列表 = 下载安装包(最新主版本, 最新完整版本)
-                    f.write(f"updated=true\nversion={最新主版本}\nfull_version={最新完整版本}\n")
                     f.write(f"assets={' '.join(文件列表)}\n")
+                    f.write(f"need_release=true\n")
                 else:
-                    f.write("updated=false\n")
+                    f.write(f"need_release=false\n")
