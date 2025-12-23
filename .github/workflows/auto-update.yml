@@ -88,14 +88,33 @@ jobs:
       matrix:
         item: ${{ fromJson(needs.sync_and_release.outputs.history) }}
     steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 安装依赖
+        run: pip install requests
+
+      - name: 下载历史版本安装包
+        run: python check_version.py --download ${{ matrix.item.version }} ${{ matrix.item.full_version }}
+
       - name: 创建历史 Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ matrix.item.version }}
           name: Antigravity ${{ matrix.item.version }}
+          files: |
+            Antigravity-*
           overwrite: true
           body: |
             检测到 Antigravity 历史版本补全。
+            
+            > [!IMPORTANT]
+            > **本 Release 已自动备份历史版本安装包附件。**
             
             版本号: `${{ matrix.item.version }}`
             下载页面: https://antigravity.google/download
