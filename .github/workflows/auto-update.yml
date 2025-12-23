@@ -43,16 +43,20 @@ jobs:
           git add VERSION README.md
           git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新版本至 ${{ steps.check.outputs.version }}" && git push)
 
+      - name: 列出下载的文件
+        run: ls -lh Antigravity-* || echo "未发现待备份文件"
+
       - name: 创建最新 Release
-        # 如果是初始化过程，Release 已经由“初始化历史版本”Job 创建，这里跳过
-        if: steps.check.outputs.updated == 'true' && steps.check.outputs.init != 'true'
+        if: steps.check.outputs.updated == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.check.outputs.version }}
           name: Antigravity ${{ steps.check.outputs.version }}
-          files: ${{ steps.check.outputs.assets }}
+          files: |
+            Antigravity-*
           make_latest: true
           overwrite: true
+          fail_on_unmatched_files: true
           body: |
             检测到 Antigravity 发布了新版本！
             
@@ -89,6 +93,7 @@ jobs:
         with:
           tag_name: v${{ matrix.item.version }}
           name: Antigravity ${{ matrix.item.version }}
+          overwrite: true
           body: |
             检测到 Antigravity 历史版本补全。
             
