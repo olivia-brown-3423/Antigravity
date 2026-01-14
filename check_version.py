@@ -75,6 +75,22 @@ def 生成README内容(版本, 完整版本, 历史列表):
     内容 += "\n---\n王校长，出色！\n"
     return 内容
 
+def 加载历史记录():
+    try:
+        if os.path.exists("history.json"):
+            with open("history.json", "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"读取 history.json 失败: {e}")
+    return []
+
+def 保存历史记录(历史列表):
+    try:
+        with open("history.json", "w", encoding="utf-8") as f:
+            json.dump(历史列表, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"保存 history.json 失败: {e}")
+
 def 更新版本文件(新版本, 完整版本, 历史列表):
     版本文件路径 = "VERSION"
     README路径 = "README.md"
@@ -85,21 +101,40 @@ def 更新版本文件(新版本, 完整版本, 历史列表):
         with open(版本文件路径, "r", encoding="utf-8") as f:
             旧版本 = f.read().strip()
     
-    # 生成新内容
-    README内容 = 生成README内容(新版本, 完整版本, 历史列表)
+    # 检查是否是全新版本
+    版本变化 = (新版本 != 旧版本)
     
-    # 检查 README 是否需要更新 (不存在或者内容不一致)
+    # 如果是新版本，且不在历史列表中，则添加到历史记录
+    # 注意：这里我们维护一份完整的历史记录（包含当前最新）
+    # 但为了避免重复，我们需要检查
+    已知版本号集合 = {项["version"] for 项 in 历史列表}
+    
+    if 新版本 not in 已知版本号集合:
+        print(f"发现全新版本 {新版本}，添加到历史记录...")
+        历史列表.append({"version": 新版本, "full_version": 完整版本})
+        保存历史记录(历史列表)
+        # 重新排序或整理？目前列表是按时间顺序追加的，生成README时会倒序
+    
+    # 生成 README 内容
+    # 传递给 README 生成器的历史列表应该排除当前最新版本（因为最新版本显示在顶部）
+    # 或者生成器内部自己处理。查看生成器代码：
+    # 它遍历历史列表生成表格。我们希望表格里只显示"旧版本"。
+    # 所以这里筛选一下
+    旧版本列表 = [项 for 项 in 历史列表 if 项["version"] != 新版本]
+    README内容 = 生成README内容(新版本, 完整版本, 旧版本列表)
+    
+    # 检查 README 是否需要更新
     需要更新README = not README已存在
     if README已存在:
         with open(README路径, "r", encoding="utf-8") as f:
             if f.read() != README内容:
                 需要更新README = True
 
-    # 写入新内容
-    with open(README路径, "w", encoding="utf-8") as f:
-        f.write(README内容)
+    # 写入 README
+    if 需要更新README:
+        with open(README路径, "w", encoding="utf-8") as f:
+            f.write(README内容)
     
-    版本变化 = (新版本 != 旧版本)
     if 版本变化:
         print(f"检测到新版本: {旧版本} -> {新版本}")
         with open(版本文件路径, "w", encoding="utf-8") as f:
@@ -138,6 +173,8 @@ def 下载安装包(版本, 完整版本):
 
 if __name__ == "__main__":
     import sys
+    import json
+    
     # 支持命令行参数直接下载指定版本 (用于历史版本备份)
     if len(sys.argv) > 3 and sys.argv[1] == "--download":
         版本 = sys.argv[2]
@@ -145,22 +182,12 @@ if __name__ == "__main__":
         下载安装包(版本, 完整版本)
         sys.exit(0)
 
-    # 历史版本数据
-    历史版本列表 = [
-        {"version": "1.11.2", "full_version": "1.11.2-6251250307170304"},
-        {"version": "1.11.3", "full_version": "1.11.3-6583016683339776"},
-        {"version": "1.11.5", "full_version": "1.11.5-5234145629700096"},
-        {"version": "1.11.9", "full_version": "1.11.9-4787439284912128"},
-        {"version": "1.11.14", "full_version": "1.11.14-5763785964257280"},
-        {"version": "1.11.17", "full_version": "1.11.17-6639170008514560"},
-        {"version": "1.12.4", "full_version": "1.12.4-5388582906101760"},
-        {"version": "1.13.3", "full_version": "1.13.3-4533425205018624"}
-    ]
+    # 加载历史版本数据
+    历史版本列表 = 加载历史记录()
 
     最新主版本, 最新完整版本 = 获取最新版本()
     
     # 检查是否需要初始化
-    # 如果 VERSION 不存在，或者 README 不存在，我们都认为需要一次完整的同步
     需要初始化 = not os.path.exists("VERSION")
     
     if 最新主版本:
@@ -169,7 +196,6 @@ if __name__ == "__main__":
         if "GITHUB_OUTPUT" in os.environ:
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                 if 需要初始化:
-                    import json
                     # 历史旧版本不包含当前最新版
                     历史旧版本 = [项 for 项 in 历史版本列表 if 项["version"] != 最新主版本]
                     f.write(f"init=true\n")
